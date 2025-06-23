@@ -1,0 +1,347 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  password          String
+  name              String
+  role              Role     @default(STUDENT)
+  isActive          Boolean  @default(true)
+  emailVerified     Boolean  @default(false)
+  emailVerifiedAt   DateTime?
+  lastLogin         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  studentProfile    StudentProfile?
+  applications      Application[]
+  payments          Payment[]
+  auditLogs         AuditLog[]
+
+  @@map("users")
+}
+
+model StudentProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Personal Details
+  firstName         String
+  middleName        String?
+  lastName          String
+  dateOfBirth       DateTime
+  gender            Gender
+  aadharNumber      String   @unique
+  phone             String
+  alternatePhone    String?
+  nationality       String   @default("Indian")
+  
+  // Academic Details
+  tenthBoard        String
+  tenthSchool       String
+  tenthYear         Int
+  tenthPercentage   Float
+  tenthMarksheet    String?
+  
+  twelfthBoard      String
+  twelfthCollege    String
+  twelfthYear       Int
+  twelfthPercentage Float
+  twelfthMarksheet  String?
+  
+  // Category Details
+  category          Category
+  religion          String
+  caste             String?
+  subCaste          String?
+  
+  // Family Details
+  fatherName        String
+  motherName        String
+  guardianName      String?
+  fatherOccupation  String?
+  motherOccupation  String?
+  annualIncome      String
+  
+  // Address Details
+  permanentAddress  String
+  currentAddress    String?
+  district          String
+  state             String
+  pincode           String
+  domicileState     String?
+  
+  // Documents
+  photograph        String?
+  signature         String?
+  
+  // Profile Status
+  isComplete        Boolean  @default(false)
+  completedAt       DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  applications      Application[]
+  documents         Document[]
+
+  @@map("student_profiles")
+}
+
+model AdmissionPeriod {
+  id                String   @id @default(cuid())
+  name              String
+  academicYear      String
+  startDate         DateTime
+  endDate           DateTime
+  isActive          Boolean  @default(false)
+  applicationFee    Float
+  description       String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  applications      Application[]
+  courses           Course[]
+
+  @@map("admission_periods")
+}
+
+model Course {
+  id                String   @id @default(cuid())
+  name              String
+  code              String   @unique
+  department        String
+  degree            String
+  duration          Int      // in years
+  totalSeats        Int
+  generalSeats      Int
+  scSeats           Int
+  stSeats           Int
+  obcSeats          Int
+  ewsSeats          Int
+  
+  // Eligibility Criteria
+  minPercentage     Float
+  eligibleBoards    String[] // JSON array of eligible boards
+  eligibleStreams   String[] // JSON array of eligible streams
+  
+  // Fee Structure
+  generalFee        Float
+  scFee             Float
+  stFee             Float
+  obcFee            Float
+  ewsFee            Float
+  
+  description       String?
+  isActive          Boolean  @default(true)
+  
+  admissionPeriodId String
+  admissionPeriod   AdmissionPeriod @relation(fields: [admissionPeriodId], references: [id])
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  applications      Application[]
+
+  @@map("courses")
+}
+
+model Application {
+  id                String   @id @default(cuid())
+  applicationNumber String   @unique
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  
+  studentProfileId  String
+  studentProfile    StudentProfile @relation(fields: [studentProfileId], references: [id])
+  
+  admissionPeriodId String
+  admissionPeriod   AdmissionPeriod @relation(fields: [admissionPeriodId], references: [id])
+  
+  courseId          String
+  course            Course   @relation(fields: [courseId], references: [id])
+  
+  // Application Status
+  status            ApplicationStatus @default(DRAFT)
+  currentStep       Int      @default(1)
+  totalSteps        Int      @default(5)
+  
+  // Eligibility Check
+  isEligible        Boolean?
+  eligibilityReason String?
+  
+  // Payment Details
+  applicationFee    Float
+  paymentStatus     PaymentStatus @default(PENDING)
+  
+  // Review Details
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewComments    String?
+  
+  // Important Dates
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  payments          Payment[]
+  documents         Document[]
+
+  @@map("applications")
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  transactionId     String   @unique
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  razorpaySignature String?
+  
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  
+  applicationId     String
+  application       Application @relation(fields: [applicationId], references: [id])
+  
+  amount            Float
+  currency          String   @default("INR")
+  status            PaymentStatus @default(PENDING)
+  paymentMethod     String?
+  
+  // Razorpay Response
+  razorpayResponse  Json?
+  
+  // Receipt Details
+  receiptNumber     String?
+  receiptUrl        String?
+  
+  // Retry Mechanism
+  retryCount        Int      @default(0)
+  maxRetries        Int      @default(3)
+  
+  // Timestamps
+  initiatedAt       DateTime @default(now())
+  completedAt       DateTime?
+  failedAt          DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("payments")
+}
+
+model Document {
+  id                String   @id @default(cuid())
+  name              String
+  type              DocumentType
+  fileName          String
+  fileUrl           String
+  fileSize          Int
+  mimeType          String
+  
+  studentProfileId  String
+  studentProfile    StudentProfile @relation(fields: [studentProfileId], references: [id])
+  
+  applicationId     String?
+  application       Application? @relation(fields: [applicationId], references: [id])
+  
+  // Verification Status
+  isVerified        Boolean  @default(false)
+  verifiedBy        String?
+  verifiedAt        DateTime?
+  verificationNotes String?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("documents")
+}
+
+model AuditLog {
+  id                String   @id @default(cuid())
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id])
+  
+  action            String
+  entity            String
+  entityId          String
+  oldValues         Json?
+  newValues         Json?
+  ipAddress         String?
+  userAgent         String?
+  
+  createdAt         DateTime @default(now())
+
+  @@map("audit_logs")
+}
+
+// Enums
+enum Role {
+  STUDENT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Category {
+  GENERAL
+  SC
+  ST
+  OBC
+  EWS
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WAITLISTED
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum DocumentType {
+  PHOTOGRAPH
+  SIGNATURE
+  TENTH_MARKSHEET
+  TWELFTH_MARKSHEET
+  AADHAR_CARD
+  CATEGORY_CERTIFICATE
+  INCOME_CERTIFICATE
+  DOMICILE_CERTIFICATE
+  OTHER
+}
